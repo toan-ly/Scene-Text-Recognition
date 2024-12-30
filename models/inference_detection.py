@@ -2,6 +2,7 @@ from ultralytics import YOLO
 from PIL import Image
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+import os
 
 def load_model(model_path):
     return YOLO(model_path)
@@ -11,7 +12,7 @@ def detect_text(model, im_path):
     results = results[0].boxes
     return results
 
-def visualize_bbox(im_path, results, conf_thres=0.7):
+def visualize_bbox(im_path, results, conf_thres=0.7, save_dir=None):
     im = Image.open(im_path)
     plt.imshow(im)
     plt.axis('off')
@@ -33,12 +34,18 @@ def visualize_bbox(im_path, results, conf_thres=0.7):
         # Add confidence score
         text = f'{conf_score:.2f}'
         plt.text(x1 + 5, y1 - 10, text, color='k', fontsize=6, bbox=dict(facecolor='w', alpha=0.5))
+
+    if save_dir:
+        im_path = im_path.split('/')[-1]
+        plt.savefig(os.path.join(save_dir, im_path), bbox_inches='tight', pad_inches=0)
+        print(f'Saved image to {save_dir+im_path}')
     
 
 if __name__ == '__main__':
     model_path = 'models/weights/yolo_best.pt'
-    im_path = '/data/SceneTrialTrain/lfsosa_12.08.2002/IMG_2461.JPG'
+    im_path = 'data/SceneTrialTrain/apanar_06.08.2002/IMG_1290.JPG'
+    save_dir = 'results'
     
     yolo_model = load_model(model_path)
     results = detect_text(yolo_model, im_path)
-    visualize_bbox(im_path, results, conf_thres=0.7)
+    visualize_bbox(im_path, results, conf_thres=0.7, save_dir=save_dir)
