@@ -14,13 +14,12 @@ from torchvision import transforms
 from ultralytics import YOLO
 from ultralytics.utils.plotting import Annotator, colors
 
+# ----------------- App Initialization -----------------
 app = FastAPI()
 
-# Constants
-# TEXT_detection_model_PATH = "../runs/detect/train/weights/best.pt"
+# ----------------- Constants -----------------
 TEXT_detection_model_PATH = "../models/weights/yolo_best.pt"
 OCR_MODEL_PATH = "../models/weights/ocr_crnn.pt"
-
 
 # Character set configuration
 CHARS = "0123456789abcdefghijklmnopqrstuvwxyz-"
@@ -33,7 +32,7 @@ N_LAYERS = 3
 DROPOUT_PROB = 0.2
 UNFREEZE_LAYERS = 3
 
-
+# ----------------- API Deployment -----------------
 @serve.deployment(num_replicas=1)
 @serve.ingress(app)
 class APIIngress:
@@ -53,9 +52,7 @@ class APIIngress:
 
             # Load the image and draw predictions
             image = Image.open(temp_file_path)
-            annotated_image = await self.handle.draw_predictions.remote(
-                image, predictions
-            )
+            annotated_image = await self.handle.draw_predictions.remote(image, predictions)
 
             # Convert annotated image to bytes
             file_stream = BytesIO()
@@ -175,6 +172,9 @@ class OCRService:
         )  # Sort by y1 coordinate
 
         for bbox, class_name, confidence, text in predictions:
+            if confidence < 0.4:
+                continue
+
             # Convert bbox coordinates to integers
             x1, y1, x2, y2 = [int(coord) for coord in bbox]
 
@@ -182,7 +182,8 @@ class OCRService:
             color = colors(hash(class_name) % 20, True)
 
             # Create more compact label
-            label = f"{class_name[:3]}{confidence:.1f}:{text}"  # Shortened format
+            # label = f"{class_name}{confidence:.1f}:{text}" 
+            label = f'{text} {confidence:.2f}'
 
             # Draw box and label with offset
             # Place label above the box with small offset
@@ -214,10 +215,9 @@ class OCRService:
         return decoded_sequences
 
 
-# ----------------  Initialize YOLO model
+# ---------------- Model Initialization ----------------
 detection_model = YOLO(TEXT_detection_model_PATH)
 
-# ----------------  Initialize CRNN model
 recognition_model = CRNN(
     vocab_size=len(CHARS),
     hidden_size=HIDDEN_SIZE,
@@ -225,12 +225,10 @@ recognition_model = CRNN(
     dropout=DROPOUT_PROB,
     unfreeze_layers=UNFREEZE_LAYERS,
 )
-
-
-recognition_model.load_state_dict(torch.load(OCR_MODEL_PATH))
+recognition_model.load_state_dict(torch.load(OCR_MODEL_PATH, map_location="cpu"))
 recognition_model.eval()
 
-# ----------------  Create the service
+# ----------------  Service Binding ----------------
 entrypoint = APIIngress.bind(
     OCRService.bind(
         recognition_model=recognition_model,
