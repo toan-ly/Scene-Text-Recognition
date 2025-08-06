@@ -137,7 +137,7 @@ def main():
 
                     # Predictions below
                     st.subheader("📝 Detected Text")
-                    st.code(format_predictions(predictions), language="text")
+                    st.code(format_predictions(predictions), language="json")
 
     # ------ File Upload ------
     with tabs[1]:
@@ -162,7 +162,7 @@ def main():
                             st.image(image, use_container_width=True)
 
                         st.subheader("📝 Detected Text")
-                        st.code(format_predictions(predictions), language="text")
+                        st.code(format_predictions(predictions), language="json")
 
 
 if __name__ == "__main__":

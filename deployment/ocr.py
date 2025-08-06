@@ -99,7 +99,7 @@ class APIIngress:
 
 
 @serve.deployment(
-    ray_actor_options={"num_gpus": 0.5, "num_cpus": 4},
+    ray_actor_options={"num_gpus": 0, "num_cpus": 4},
     autoscaling_config={"min_replicas": 1, "max_replicas": 2},
 )
 class OCRService:
@@ -226,13 +226,8 @@ recognition_model = CRNN(
     unfreeze_layers=UNFREEZE_LAYERS,
 )
 
-if torch.cuda.is_available():
-    device = "cuda"
-elif torch.backends.mps.is_available():
-    device = "mps"
-else:
-    device = "cpu"
-recognition_model.load_state_dict(torch.load(OCR_MODEL_PATH, map_location=device))
+
+recognition_model.load_state_dict(torch.load(OCR_MODEL_PATH))
 recognition_model.eval()
 
 # ----------------  Create the service
