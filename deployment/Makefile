@@ -6,7 +6,7 @@ clean:
 
 init: clean
 	mkdir -p /tmp/ray_project
-	ray start --head --disable-usage-stats --temp-dir=/tmp/ray_project --dashboard-host=0.0.0.0
+	ray start --head --include-dashboard=true --disable-usage-stats --temp-dir=/tmp/ray_project --dashboard-host=0.0.0.0
 
 deploy:
 	@echo "Starting object detection server..."

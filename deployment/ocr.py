@@ -5,7 +5,7 @@ from io import BytesIO
 import numpy as np
 import requests
 import torch
-from crnn import CRNN
+from crnn import CRNN 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import Response
 from PIL import Image
@@ -17,8 +17,10 @@ from ultralytics.utils.plotting import Annotator, colors
 app = FastAPI()
 
 # Constants
-TEXT_DET_MODEL_PATH = "../runs/detect/train/weights/best.pt"
-OCR_MODEL_PATH = "../ocr_crnn.pt"
+# TEXT_detection_model_PATH = "../runs/detect/train/weights/best.pt"
+TEXT_detection_model_PATH = "../models/weights/yolo_best.pt"
+OCR_MODEL_PATH = "../models/weights/ocr_crnn.pt"
+
 
 # Character set configuration
 CHARS = "0123456789abcdefghijklmnopqrstuvwxyz-"
@@ -101,10 +103,10 @@ class APIIngress:
     autoscaling_config={"min_replicas": 1, "max_replicas": 2},
 )
 class OCRService:
-    def __init__(self, reg_model, det_model):
+    def __init__(self, recognition_model, detection_model):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.reg_model = reg_model.to(self.device)
-        self.det_model = det_model.to(self.device)
+        self.recognition_model = recognition_model.to(self.device)
+        self.detection_model = detection_model.to(self.device)
 
         # Define transform for inference
         self.transform = transforms.Compose(
@@ -118,7 +120,7 @@ class OCRService:
 
     def text_detection(self, img_path):
         """Detect text regions in the image"""
-        results = self.det_model(img_path, verbose=False)[0]
+        results = self.detection_model(img_path, verbose=False)[0]
         return (
             results.boxes.xyxy.tolist(),
             results.boxes.cls.tolist(),
@@ -130,7 +132,7 @@ class OCRService:
         """Recognize text in the cropped image"""
         transformed_image = self.transform(img).unsqueeze(0).to(self.device)
         with torch.no_grad():
-            logits = self.reg_model(transformed_image).cpu()
+            logits = self.recognition_model(transformed_image).cpu()
         text = self.decode(logits.permute(1, 0, 2).argmax(2), IDX_TO_CHAR)
         return text
 
@@ -213,23 +215,30 @@ class OCRService:
 
 
 # ----------------  Initialize YOLO model
-det_model = YOLO(TEXT_DET_MODEL_PATH)
+detection_model = YOLO(TEXT_detection_model_PATH)
 
 # ----------------  Initialize CRNN model
-reg_model = CRNN(
+recognition_model = CRNN(
     vocab_size=len(CHARS),
     hidden_size=HIDDEN_SIZE,
     n_layers=N_LAYERS,
     dropout=DROPOUT_PROB,
     unfreeze_layers=UNFREEZE_LAYERS,
 )
-reg_model.load_state_dict(torch.load(OCR_MODEL_PATH))
-reg_model.eval()
+
+if torch.cuda.is_available():
+    device = "cuda"
+elif torch.backends.mps.is_available():
+    device = "mps"
+else:
+    device = "cpu"
+recognition_model.load_state_dict(torch.load(OCR_MODEL_PATH, map_location=device))
+recognition_model.eval()
 
 # ----------------  Create the service
 entrypoint = APIIngress.bind(
     OCRService.bind(
-        reg_model=reg_model,
-        det_model=det_model,
+        recognition_model=recognition_model,
+        detection_model=detection_model,
     )
 )
